@@ -1,69 +1,47 @@
 const express = require('express');
-const sqlite3 = require('sqlite3').verbose();
+const nodemailer = require('nodemailer');
 const cors = require('cors');
 const app = express();
 const port = 8000;
 
 // Middleware
-app.use(cors()); // Allow CORS for frontend requests
-app.use(express.json()); // Parse JSON bodies
+app.use(cors());
+app.use(express.json());
 
-// Connect to SQLite database
-const db = new sqlite3.Database('./db/notes.db', (err) => {
-  if (err) {
-    console.error('Error opening database', err.message);
-  } else {
-    console.log('Connected to the SQLite database.');
-    db.run(`CREATE TABLE IF NOT EXISTS notes (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      content TEXT
-    )`);
-  }
+// Create a transporter for sending emails using Gmail SMTP
+const transporter = nodemailer.createTransport({
+  service: 'gmail',
+  auth: {
+    user: 'onlinenotepads@gmail.com',  // Replace with your email
+    pass: 'cpeqelgduitwirja',   // Replace with your email password
+  },
 });
 
-// API to get all notes
-app.get('/notes', (req, res) => {
-  db.all('SELECT * FROM notes', [], (err, rows) => {
-    if (err) {
-      res.status(400).json({ error: err.message });
-      return;
-    }
-    res.json(rows);
-  });
-});
+app.post('/send-email', (req, res) => {
+  const { emailList, note } = req.body;
 
-// API to save a new note
-app.post('/notes', (req, res) => {
-  const note = req.body.note; // Get note from the request body
-  if (!note) {
-    res.status(400).json({ error: 'Note content is required' });
-    return;
+  if (!emailList || !note) {
+    return res.status(400).send('Email and note are required.');
   }
 
-  db.run(`INSERT INTO notes (content) VALUES (?)`, [note], function(err) {
-    if (err) {
-      res.status(400).json({ error: err.message });
-      return;
+  const mailOptions = {
+    from: 'onlinenotepads@gmail.com',
+    to: emailList, // Multiple recipients
+    subject: 'Your Notepad Note',
+    text: `Here is your note: \n\n${note}`,
+  };
+
+  transporter.sendMail(mailOptions, (error, info) => {
+    if (error) {
+      console.error('Error sending email:', error);
+      return res.status(500).send('Error sending email.');
+    } else {
+      console.log('Email sent:', info.response);
+      res.send('Email sent successfully!');
     }
-    res.json({
-      id: this.lastID,
-      content: note
-    });
   });
 });
 
-// API to get a single note by ID
-app.get('/notes/:id', (req, res) => {
-    const { id } = req.params;
-    db.get('SELECT * FROM notes WHERE id = ?', [id], (err, row) => {
-      if (err) {
-        res.status(400).json({ error: err.message });
-        return;
-      }
-      res.json(row);
-    });
-  });
-  
 
 // Start the server
 app.listen(port, () => {
